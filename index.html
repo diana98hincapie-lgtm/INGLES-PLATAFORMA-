@@ -578,8 +578,50 @@ ${buildContext(sessions,productions)}
 ${historial?"\n--- CONVERSACIÓN PREVIA ---\n"+historial:""}
 
 PREGUNTA ACTUAL DEL ESTUDIANTE: ${q}`;
-      const reply=await callClaude([{role:"user",content:sys}]);
-      setMessages([...nm,{role:"assistant",content:reply||"No pude responder."}]);
+      // ¿La pregunta es sobre audios/speaking? Entonces le adjuntamos los audios reales para que los ESCUCHE.
+      const quiereAudio=/audio|speaking|pronunci|grab|hablad|\bvoz\b|fluid/i.test(q);
+      let parts=[{text:sys}];
+      let adjuntados=[];
+      if(quiereAudio){
+        const conAudio=productions.filter(p=>p.type==="speaking"&&p.audioId);
+        // Detecta una fecha YYYY-MM-DD en la pregunta; si pide "hoy", usa hoy; si no, los más recientes
+        const mFecha=q.match(/\d{4}-\d{2}-\d{2}/);
+        let sel;
+        if(mFecha) sel=conAudio.filter(p=>p.date===mFecha[0]);
+        else if(/hoy/i.test(q)) sel=conAudio.filter(p=>p.date===todayStr());
+        else sel=[...conAudio].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2);
+        sel=(sel&&sel.length?sel:[...conAudio].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2)).slice(0,3);
+        for(const p of sel){
+          try{
+            const blob=await getAudioBlob(p.audioId);
+            if(blob){
+              const b64=await blobToB64(blob);
+              parts.push({text:`\n[AUDIO REAL adjunto — fecha ${p.date}, tema: ${p.topic||"—"}]`});
+              parts.push({inlineData:{mimeType:blob.type||"audio/webm",data:b64}});
+              adjuntados.push(p.date);
+            }
+          }catch(err){/* si un audio falla, seguimos con los demás */}
+        }
+        if(adjuntados.length) parts[0]={text:sys+`\n\n*** IMPORTANTE: Te adjunto ${adjuntados.length} AUDIO(S) REAL(ES) del estudiante (fechas: ${adjuntados.join(", ")}). ESCÚCHALOS y analiza pronunciación, fluidez, entonación, gramática y vocabulario al hablar. YA NO digas que no puedes oír el audio: SÍ puedes, están adjuntos. ***`};
+      }
+      // ¿Pregunta sobre un video/link de YouTube? Adjunta el video para que lo VEA.
+      const quiereVideo=/video|youtube|youtu|enlace|\blink\b/i.test(q);
+      if(quiereVideo){
+        const conLink=sessions.filter(s=>s.link&&/youtu/.test(s.link));
+        const mF=q.match(/\d{4}-\d{2}-\d{2}/);
+        let selV;
+        if(mF) selV=conLink.filter(s=>s.date===mF[0]);
+        else if(/hoy/i.test(q)) selV=conLink.filter(s=>s.date===todayStr());
+        else selV=[...conLink].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,1);
+        selV=(selV&&selV.length?selV:[...conLink].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,1)).slice(0,1);
+        if(selV.length){
+          parts.push({text:`\n[VIDEO de YouTube adjunto — fecha ${selV[0].date}, tema: ${selV[0].topic||"—"}]`});
+          parts.push({fileData:{fileUri:selV[0].link}});
+          parts[0]={text:parts[0].text+`\n\n*** Te adjunto un VIDEO de YouTube real que estudió. VELO y analízalo (qué enseña, vocabulario, gramática, nivel). ***`};
+        }
+      }
+      const reply=await callGemini(parts);
+      setMessages([...nm,{role:"assistant",content:(quiereAudio&&!adjuntados.length?"(No encontré audios para esa fecha; analizo con los datos que hay)\n\n":"")+(reply||"No pude responder.")}]);
     }catch(e){setMessages([...nm,{role:"assistant",content:e.nokey?"Agrega tu clave de Gemini en ⚙️ Ajustes para usar el asistente.":("Error: "+(e.message||e))}]);}
     setBusy(false);
   }
