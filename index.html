@@ -551,7 +551,7 @@ function AssistantView({sessions,productions}){
   const [messages,setMessages]=useState([]),[input,setInput]=useState(""),[busy,setBusy]=useState(false);
   const endRef=useRef(null);
   useEffect(()=>{endRef.current&&endRef.current.scrollIntoView({behavior:"smooth"});},[messages,busy]);
-  const quick=["Analiza mi nivel real y mis errores (sé honesto)","Hazme un repaso realista de esta semana","¿Qué errores repito en mis writings?","¿Qué temas me faltan según lo que he estudiado?"];
+  const quick=["🎧 Analiza mis audios de hoy (escúchalos)","🎧 Escucha todos mis speakings y dime mi pronunciación","🎥 Analiza el video de YouTube de hoy","Analiza mi nivel real y mis errores (sé honesto)"];
   async function send(text){
     const q=text||input;if(!q.trim()||busy)return;
     const nm=[...messages,{role:"user",content:q}];setMessages(nm);setInput("");setBusy(true);
@@ -582,15 +582,21 @@ PREGUNTA ACTUAL DEL ESTUDIANTE: ${q}`;
       const quiereAudio=/audio|speaking|pronunci|grab|hablad|\bvoz\b|fluid/i.test(q);
       let parts=[{text:sys}];
       let adjuntados=[];
+      let avisoCorte="";
       if(quiereAudio){
         const conAudio=productions.filter(p=>p.type==="speaking"&&p.audioId);
-        // Detecta una fecha YYYY-MM-DD en la pregunta; si pide "hoy", usa hoy; si no, los más recientes
+        // Detecta una fecha YYYY-MM-DD; "hoy"; "todos"; o si no, los más recientes
         const mFecha=q.match(/\d{4}-\d{2}-\d{2}/);
+        const pideTodos=/\btodos?\b|cada d[ií]a|toda?s? (las|mis)|all/i.test(q);
+        const recientes=[...conAudio].sort((a,b)=>b.date.localeCompare(a.date));
+        const TOPE=6; // máximo de audios por mensaje (para no saturar la IA)
         let sel;
         if(mFecha) sel=conAudio.filter(p=>p.date===mFecha[0]);
         else if(/hoy/i.test(q)) sel=conAudio.filter(p=>p.date===todayStr());
-        else sel=[...conAudio].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2);
-        sel=(sel&&sel.length?sel:[...conAudio].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2)).slice(0,3);
+        else if(pideTodos) sel=recientes;
+        else sel=recientes.slice(0,2);
+        if(!sel||!sel.length) sel=recientes.slice(0,2);
+        if(sel.length>TOPE){avisoCorte=`(Tienes ${sel.length} audios; analizo los ${TOPE} más recientes para no saturar. Pídeme una fecha específica para revisar otros.)\n\n`;sel=[...sel].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,TOPE);}
         for(const p of sel){
           try{
             const blob=await getAudioBlob(p.audioId);
@@ -621,7 +627,8 @@ PREGUNTA ACTUAL DEL ESTUDIANTE: ${q}`;
         }
       }
       const reply=await callGemini(parts);
-      setMessages([...nm,{role:"assistant",content:(quiereAudio&&!adjuntados.length?"(No encontré audios para esa fecha; analizo con los datos que hay)\n\n":"")+(reply||"No pude responder.")}]);
+      const aviso=avisoCorte+(quiereAudio&&!adjuntados.length?"(No encontré audios para esa fecha; analizo con los datos que hay)\n\n":"");
+      setMessages([...nm,{role:"assistant",content:aviso+(reply||"No pude responder.")}]);
     }catch(e){setMessages([...nm,{role:"assistant",content:e.nokey?"Agrega tu clave de Gemini en ⚙️ Ajustes para usar el asistente.":("Error: "+(e.message||e))}]);}
     setBusy(false);
   }
