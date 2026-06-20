@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mi Inglés Inteligente</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:#f1f5f9; color:#1e293b; }
+  #root { max-width: 920px; margin: 0 auto; background:#fff; min-height:100vh; }
+  header { background: linear-gradient(90deg,#4f46e5,#7c3aed); color:#fff; padding:18px 20px; border-radius:0 0 18px 18px; }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; color:#e0e7ff; font-size:13px; }
+  nav { display:flex; gap:4px; padding:8px; overflow-x:auto; border-bottom:1px solid #f1f5f9; position:sticky; top:0; background:#fff; z-index:5; }
+  nav button { display:flex; align-items:center; gap:5px; padding:8px 12px; border:0; background:none; border-radius:8px; font-size:14px; font-weight:600; color:#64748b; white-space:nowrap; cursor:pointer; }
+  nav button.active { background:#e0e7ff; color:#4338ca; }
+  main { padding:18px; min-height:380px; }
+  .card { border:1px solid #e2e8f0; border-radius:12px; padding:14px; }
+  .input, textarea, select { width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; font-family:inherit; }
+  textarea { resize:vertical; }
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border:0; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; }
+  .btn-primary { background:#4f46e5; color:#fff; }
+  .btn-red { background:#ef4444; color:#fff; }
+  .btn-green { background:#10b981; color:#fff; }
+  .btn-amber { background:#f59e0b; color:#fff; }
+  .btn-ghost { background:#fff; color:#475569; border:1px solid #e2e8f0; }
+  .btn-soft { background:#f1f5f9; color:#475569; }
+  .btn:disabled { opacity:.45; cursor:default; }
+  .chip { font-size:12px; font-weight:600; padding:3px 9px; border-radius:999px; cursor:pointer; border:1px solid #e2e8f0; background:#fff; color:#475569; }
+  .chip.on { color:#fff; border-color:transparent; }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .stat { background:#f8fafc; border-radius:12px; padding:14px; text-align:center; }
+  .stat b { display:block; font-size:22px; color:#4f46e5; }
+  .stat span { font-size:11px; color:#64748b; }
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal .dow { text-align:center; font-size:11px; font-weight:700; color:#94a3b8; padding:4px 0; }
+  .cal .day { aspect-ratio:1; border:1px solid #f1f5f9; border-radius:9px; background:#fff; cursor:pointer; display:flex; flex-direction:column; align-items:center; padding:3px; font-size:12px; }
+  .cal .day:hover { border-color:#818cf8; }
+  .cal .day.today { border-color:#6366f1; background:#eef2ff; }
+  .dots { display:flex; flex-wrap:wrap; gap:2px; justify-content:center; margin-top:3px; }
+  .dot { width:6px; height:6px; border-radius:50%; }
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
+  .modal { background:#fff; width:100%; max-width:520px; border-radius:18px 18px 0 0; max-height:90vh; overflow-y:auto; }
+  .bar-row { display:flex; align-items:center; gap:8px; margin:6px 0; font-size:13px; }
+  .bar-label { width:90px; color:#475569; }
+  .bar-track { flex:1; background:#f1f5f9; border-radius:6px; height:18px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:6px; }
+  .msg { max-width:85%; padding:10px 13px; border-radius:16px; font-size:14px; white-space:pre-wrap; }
+  .msg.user { background:#4f46e5; color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+  .msg.bot { background:#f1f5f9; color:#334155; align-self:flex-start; border-bottom-left-radius:4px; }
+  .muted { color:#94a3b8; font-size:13px; }
+  .label { font-size:12px; font-weight:700; color:#64748b; }
+  a { color:#4f46e5; }
+  @media(min-width:640px){ .modal-bg{align-items:center;padding:16px;} .modal{border-radius:18px;} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const SKILLS = {
+  listening:{label:"Listening",color:"#3b82f6",emoji:"🎧"},
+  reading:{label:"Reading",color:"#10b981",emoji:"📖"},
+  writing:{label:"Writing",color:"#f59e0b",emoji:"✍️"},
+  speaking:{label:"Speaking",color:"#ef4444",emoji:"🗣️"},
+  grammar:{label:"Grammar",color:"#8b5cf6",emoji:"📐"},
+  vocabulary:{label:"Vocabulary",color:"#ec4899",emoji:"📚"},
+};
+const SK = Object.keys(SKILLS);
+const MONTHS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const DOW=["L","M","X","J","V","S","D"];
+const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const todayStr=()=>fmt(new Date());
+const prettyDate=s=>{const[y,m,d]=s.split("-");return `${d} ${MONTHS[+m-1].slice(0,3)} ${y}`;};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const load=(k,def)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch{return def;}};
+const persist=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){console.error(e);}};
+
+// ---- Supabase (memoria externa en la nube) ----
+const SB={
+  url:()=>(localStorage.getItem("sb_url")||"").trim().replace(/\/$/,""),
+  key:()=>(localStorage.getItem("sb_key")||"").trim(),
+  on(){return !!(this.url()&&this.key()&&window.supabase);},
+  _c:null,
+  client(){if(!this.on())return null;if(!this._c)this._c=window.supabase.createClient(this.url(),this.key());return this._c;}
+};
+// Devuelve el array guardado, o null si todavía no existe esa fila en la nube
+async function cloudLoad(key){
+  const c=SB.client();if(!c)return undefined;
+  const {data,error}=await c.from("app_data").select("value").eq("id",key).maybeSingle();
+  if(error)throw error;
+  return data?data.value:null;
+}
+async function cloudSave(key,value){
+  const c=SB.client();if(!c)return;
+  const {error}=await c.from("app_data").upsert({id:key,value});
+  if(error)throw error;
+}
+
+// ---- Audio: nube si está configurada, si no IndexedDB local ----
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open("etAudioDB",1);r.onupgradeneeded=()=>r.result.createObjectStore("audios");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function putAudio(id,blob){
+  const c=SB.client();
+  if(c){const{error}=await c.storage.from("audios").upload(id,blob,{upsert:true,contentType:blob.type||"audio/webm"});if(error)throw error;return;}
+  const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction("audios","readwrite");t.objectStore("audios").put(blob,id);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});
+}
+async function getAudio(id){
+  if(SB.on())return SB.url()+"/storage/v1/object/public/audios/"+encodeURIComponent(id);
+  const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction("audios","readonly");const q=t.objectStore("audios").get(id);q.onsuccess=()=>res(q.result?URL.createObjectURL(q.result):null);q.onerror=()=>rej(q.error);});
+}
+async function delAudio(id){
+  const c=SB.client();
+  if(c){await c.storage.from("audios").remove([id]);return;}
+  const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction("audios","readwrite");t.objectStore("audios").delete(id);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});
+}
+
+async function callClaude(messages){
+  const key=localStorage.getItem("et_apikey");
+  if(!key) throw {nokey:true};
+  const contents=messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}));
+  const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+encodeURIComponent(key),{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({contents,generationConfig:{maxOutputTokens:2048}})
+  });
+  const data=await res.json();
+  if(data.error) throw new Error(data.error.message||"Error de la API");
+  const cand=(data.candidates||[])[0];
+  return ((cand&&cand.content&&cand.content.parts)||[]).filter(p=>p.text).map(p=>p.text).join("\n");
+}
+function calcStreak(sessions){const set=new Set(sessions.map(s=>s.date));let st=0,d=new Date();if(!set.has(fmt(d)))d.setDate(d.getDate()-1);while(set.has(fmt(d))){st++;d.setDate(d.getDate()-1);}return st;}
+function buildContext(sessions,productions){
+  const by={};sessions.forEach(s=>s.skills.forEach(k=>by[SKILLS[k].label]=(by[SKILLS[k].label]||0)+1));
+  const ws=productions.filter(p=>p.type==="writing"), ss=productions.filter(p=>p.type==="speaking");
+  // Sesiones de estudio, con links de YouTube/recursos incluidos
+  const r=[...sessions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,50).map(s=>
+    `- ${s.date} | habilidades: ${s.skills.map(k=>SKILLS[k].label).join(", ")} | tema: ${s.topic||"—"} | recurso/link: ${s.link||"—"} | duración: ${s.duration?s.duration+" min":"—"} | notas del estudiante: ${s.notes||"—"}`
+  ).join("\n");
+  // Writings COMPLETOS (el texto real en inglés, para poder corregir)
+  const w=[...ws].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,20).map((p,i)=>
+    `WRITING #${i+1} | fecha: ${p.date} | tema: ${p.topic||"—"}${p.prompt?" | consigna: "+p.prompt:""}\nTexto del estudiante:\n"""${p.text||"(vacío)"}"""${p.feedback?"\n(Ya recibió esta retro antes: "+p.feedback+")":""}`
+  ).join("\n\n");
+  // Speakings (no se oye el audio: se usan fecha, tema, duración y notas/transcripción)
+  const sp=[...ss].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,20).map((p,i)=>
+    `SPEAKING #${i+1} | fecha: ${p.date} | tema: ${p.topic||"—"} | duración: ${p.seconds?p.seconds+"s":"—"} | notas/transcripción: ${p.notes||"(sin notas)"}`
+  ).join("\n");
+  const links=sessions.filter(s=>s.link).map(s=>`- ${s.date} (${s.topic||"sin tema"}): ${s.link}`).join("\n");
+  return `=== DATOS REALES DEL ESTUDIANTE DE INGLÉS ===
+Total de sesiones de estudio: ${sessions.length}
+Writings entregados: ${ws.length} | Speakings entregados: ${ss.length}
+Sesiones por habilidad: ${JSON.stringify(by)}
+
+--- SESIONES DE ESTUDIO (lo que ha estudiado) ---
+${r||"(sin sesiones registradas)"}
+
+--- LINKS / RECURSOS CON LOS QUE INTERACTUÓ ---
+${links||"(no registró links)"}
+
+--- WRITINGS (TEXTOS COMPLETOS para analizar y corregir) ---
+${w||"(ningún writing entregado)"}
+
+--- SPEAKINGS (no puedes oír el audio; analiza constancia, temas, duración y notas) ---
+${sp||"(ningún speaking entregado)"}`;
+}
+
+// ---- Audio Recorder (direct mic + upload) ----
+function AudioRecorder({onSave}){
+  const [rec,setRec]=useState(false);
+  const [result,setResult]=useState(null);
+  const [url,setUrl]=useState(null);
+  const [secs,setSecs]=useState(0);
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+  const mr=useRef(null),chunks=useRef([]),timer=useRef(null);
+  async function start(){
+    setErr("");
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const m=new MediaRecorder(stream,{audioBitsPerSecond:24000});
+      chunks.current=[];
+      m.ondataavailable=e=>{if(e.data.size>0)chunks.current.push(e.data);};
+      m.onstop=()=>{const b=new Blob(chunks.current,{type:m.mimeType});setResult({blob:b,secs});setUrl(URL.createObjectURL(b));stream.getTracks().forEach(t=>t.stop());};
+      m.start();mr.current=m;setRec(true);setSecs(0);setResult(null);setUrl(null);
+      timer.current=setInterval(()=>setSecs(s=>s+1),1000);
+    }catch(e){setErr("No se pudo acceder al micrófono. Acepta el permiso del navegador, o usa \"Subir audio\".");}
+  }
+  function stop(){mr.current&&mr.current.stop();setRec(false);clearInterval(timer.current);}
+  function onFile(e){const f=e.target.files[0];if(!f)return;setResult({blob:f,secs:0});setUrl(URL.createObjectURL(f));e.target.value="";}
+  async function doSave(){if(!result)return;setBusy(true);await onSave(result.blob,result.secs);setResult(null);setUrl(null);setSecs(0);setBusy(false);}
+  const mm=String(Math.floor(secs/60)).padStart(2,"0"),ss=String(secs%60).padStart(2,"0");
+  return (
+    <div className="card" style={{background:"#f8fafc"}}>
+      {err&&<p style={{color:"#d97706",fontSize:13,marginTop:0}}>{err}</p>}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+        {!rec?<button className="btn btn-red" onClick={start}>🎤 Grabar</button>
+             :<button className="btn" style={{background:"#1e293b",color:"#fff"}} onClick={stop}>⏹ Detener</button>}
+        {rec&&<span style={{fontFamily:"monospace",fontSize:18,color:"#475569"}}>{mm}:{ss}</span>}
+        {!rec&&<label className="btn btn-ghost" style={{cursor:"pointer"}}>⬆️ Subir audio<input type="file" accept="audio/*" onChange={onFile} style={{display:"none"}}/></label>}
+      </div>
+      {url&&!rec&&(
+        <div style={{marginTop:12,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <audio src={url} controls style={{height:36}}/>
+          <button className="btn btn-green" onClick={doSave} disabled={busy}>{busy?"Guardando...":"✓ Guardar audio"}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+function AudioPlayer({audioId}){
+  const [src,setSrc]=useState(null),[loading,setLoading]=useState(false);
+  async function play(){setLoading(true);try{const u=await getAudio(audioId);if(u)setSrc(u);}catch{}setLoading(false);}
+  if(src) return <audio src={src} controls style={{height:36,maxWidth:260}}/>;
+  return <button className="btn btn-soft" onClick={play}>{loading?"...":"▶ Reproducir audio"}</button>;
+}
+
+function ProductionCard({p,onDelete}){
+  return (
+    <div className="card" style={{marginBottom:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <span className="chip on" style={{background:p.type==="writing"?SKILLS.writing.color:SKILLS.speaking.color}}>{p.type==="writing"?"✍️ Writing":"🗣️ Speaking"}</span>
+          <span className="muted">{prettyDate(p.date)}</span>
+        </div>
+        {onDelete&&<button className="btn btn-soft" style={{padding:"4px 8px"}} onClick={()=>onDelete(p)}>🗑</button>}
+      </div>
+      {p.topic&&<p style={{fontWeight:600,margin:"8px 0 0"}}>{p.topic}</p>}
+      {p.prompt&&<p className="muted" style={{fontStyle:"italic",margin:"4px 0 0"}}>Consigna: {p.prompt}</p>}
+      {p.type==="writing"&&p.text&&<p style={{whiteSpace:"pre-wrap",background:"#f8fafc",borderRadius:8,padding:8,margin:"8px 0 0",fontSize:14}}>{p.text}</p>}
+      {p.type==="speaking"&&p.audioId&&<div style={{marginTop:8}}><AudioPlayer audioId={p.audioId}/></div>}
+      {p.notes&&<p className="muted" style={{margin:"8px 0 0"}}>🗒️ {p.notes}</p>}
+      {p.feedback&&<div style={{background:"#ecfdf5",color:"#065f46",borderRadius:8,padding:8,marginTop:8,whiteSpace:"pre-wrap",fontSize:14}}>📝 {p.feedback}</div>}
+    </div>
+  );
+}
+
+function QuickWriting({onSave,onCancel,fixedDate}){
+  const [topic,setTopic]=useState(""),[text,setText]=useState(""),[date,setDate]=useState(fixedDate||todayStr());
+  return (
+    <div className="card" style={{background:"#fffbeb",borderColor:"#fde68a"}}>
+      {!fixedDate&&<input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)} style={{marginBottom:8}}/>}
+      <input className="input" placeholder="Tema del texto" value={topic} onChange={e=>setTopic(e.target.value)} style={{marginBottom:8}}/>
+      <textarea className="input" rows="5" placeholder="Escribe tu texto en inglés..." value={text} onChange={e=>setText(e.target.value)} style={{marginBottom:8}}/>
+      <button className="btn btn-amber" onClick={()=>text.trim()&&onSave({id:uid(),type:"writing",date:fixedDate||date,topic:topic.trim(),text:text.trim()})}>Guardar</button>
+      <button className="btn btn-soft" onClick={onCancel} style={{marginLeft:8}}>Cancelar</button>
+    </div>
+  );
+}
+function QuickSpeaking({onSave,onCancel,fixedDate}){
+  const [topic,setTopic]=useState(""),[notes,setNotes]=useState(""),[date,setDate]=useState(fixedDate||todayStr());
+  async function handle(blob,secs){const id=uid();await putAudio(id,blob);onSave({id,type:"speaking",date:fixedDate||date,topic:topic.trim(),notes:notes.trim(),audioId:id,seconds:secs});}
+  return (
+    <div className="card" style={{background:"#fef2f2",borderColor:"#fecaca"}}>
+      {!fixedDate&&<input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)} style={{marginBottom:8}}/>}
+      <input className="input" placeholder="Tema del speaking" value={topic} onChange={e=>setTopic(e.target.value)} style={{marginBottom:8}}/>
+      <textarea className="input" rows="2" placeholder="Notas o transcripción (opcional, ayuda al análisis)" value={notes} onChange={e=>setNotes(e.target.value)} style={{marginBottom:8}}/>
+      <AudioRecorder onSave={handle}/>
+      <button className="btn btn-soft" onClick={onCancel} style={{marginTop:8}}>Cancelar</button>
+    </div>
+  );
+}
+
+function App(){
+  const [view,setView]=useState("calendar");
+  const [sessions,setSessions]=useState(()=>load("et_sessions",[]));
+  const [productions,setProductions]=useState(()=>load("et_productions",[]));
+  const [month,setMonth]=useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1);});
+  const [dayModal,setDayModal]=useState(null);
+  const cloudReady=useRef(false);
+  // Al abrir: trae lo guardado en la nube (o sube lo local si la nube está vacía)
+  useEffect(()=>{
+    if(!SB.on())return;
+    let cancel=false;
+    (async()=>{
+      try{
+        const s=await cloudLoad("sessions");
+        const p=await cloudLoad("productions");
+        if(cancel)return;
+        if(s===null){await cloudSave("sessions",sessions);}else{setSessions(s);}
+        if(p===null){await cloudSave("productions",productions);}else{setProductions(p);}
+      }catch(e){console.error("Nube (cargar):",e);}
+      cloudReady.current=true;
+    })();
+    return ()=>{cancel=true;};
+  },[]);
+  useEffect(()=>{persist("et_sessions",sessions);if(SB.on()&&cloudReady.current)cloudSave("sessions",sessions).catch(e=>console.error("Nube (guardar sesiones):",e));},[sessions]);
+  useEffect(()=>{persist("et_productions",productions);if(SB.on()&&cloudReady.current)cloudSave("productions",productions).catch(e=>console.error("Nube (guardar producciones):",e));},[productions]);
+
+  const addSession=s=>setSessions(p=>[...p,s]);
+  const delSession=id=>setSessions(p=>p.filter(s=>s.id!==id));
+  const addProduction=pr=>setProductions(p=>[pr,...p]);
+  const delProduction=async pr=>{if(pr.audioId){try{await delAudio(pr.audioId);}catch{}}setProductions(p=>p.filter(x=>x.id!==pr.id));};
+
+  const tabs=[["calendar","📅 Calendario"],["progress","📊 Progreso"],["library","📚 Biblioteca"],["assistant","💬 Asistente"],["exam","🎓 Evaluación"],["settings","⚙️ Ajustes"]];
+  return (
+    <div>
+      <header><h1>✨ Mi Inglés Inteligente</h1><p>Registra, organiza y evalúa todo tu aprendizaje en un solo lugar.</p></header>
+      <nav>{tabs.map(([id,l])=><button key={id} className={view===id?"active":""} onClick={()=>setView(id)}>{l}</button>)}</nav>
+      <main>
+        {view==="calendar"&&<CalendarView month={month} setMonth={setMonth} sessions={sessions} productions={productions} onDay={setDayModal}/>}
+        {view==="progress"&&<ProgressView sessions={sessions} productions={productions} onDay={d=>{setDayModal(d);setView("calendar");}}/>}
+        {view==="library"&&<LibraryView sessions={sessions} productions={productions} delSession={delSession} delProduction={delProduction} addProduction={addProduction}/>}
+        {view==="assistant"&&<AssistantView sessions={sessions} productions={productions}/>}
+        {view==="exam"&&<ExamView sessions={sessions} productions={productions} addProduction={addProduction}/>}
+        {view==="settings"&&<SettingsView/>}
+      </main>
+      {dayModal&&<DayModal date={dayModal} sessions={sessions.filter(s=>s.date===dayModal)} productions={productions.filter(p=>p.date===dayModal)} onClose={()=>setDayModal(null)} addSession={addSession} delSession={delSession} addProduction={addProduction} delProduction={delProduction}/>}
+    </div>
+  );
+}
+
+function CalendarView({month,setMonth,sessions,productions,onDay}){
+  const y=month.getFullYear(),m=month.getMonth();
+  const off=(new Date(y,m,1).getDay()+6)%7, dim=new Date(y,m+1,0).getDate();
+  const cells=[];for(let i=0;i<off;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
+  const by={};sessions.forEach(s=>{(by[s.date]=by[s.date]||new Set());s.skills.forEach(k=>by[s.date].add(k));});
+  const pby={};productions.forEach(p=>{pby[p.date]=pby[p.date]||{writing:0,speaking:0};pby[p.date][p.type]++;});
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <button className="btn btn-soft" onClick={()=>setMonth(new Date(y,m-1,1))}>‹</button>
+        <b style={{fontSize:17}}>{MONTHS[m]} {y}</b>
+        <button className="btn btn-soft" onClick={()=>setMonth(new Date(y,m+1,1))}>›</button>
+      </div>
+      <div className="cal">{DOW.map(d=><div key={d} className="dow">{d}</div>)}</div>
+      <div className="cal">
+        {cells.map((d,i)=>{
+          if(d===null)return <div key={i}></div>;
+          const ds=fmt(new Date(y,m,d)),sk=by[ds]?[...by[ds]]:[],pr=pby[ds],today=ds===todayStr();
+          return <button key={i} className={"day"+(today?" today":"")} onClick={()=>onDay(ds)}>
+            <span style={{fontWeight:600,color:today?"#4f46e5":"#475569"}}>{d}</span>
+            <div className="dots">{sk.slice(0,6).map(k=><span key={k} className="dot" style={{background:SKILLS[k].color}}></span>)}</div>
+            {pr&&<div style={{marginTop:"auto",fontSize:10}}>{pr.writing>0?"✍️":""}{pr.speaking>0?"🗣️":""}</div>}
+          </button>;
+        })}
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginTop:16}}>
+        {SK.map(k=><span key={k} className="muted" style={{display:"flex",alignItems:"center",gap:5}}><span className="dot" style={{background:SKILLS[k].color,width:9,height:9}}></span>{SKILLS[k].label}</span>)}
+      </div>
+      <p className="muted" style={{textAlign:"center",marginTop:14}}>Toca un día para ver sus sesiones, writing y speaking, o agregar uno nuevo.</p>
+    </div>
+  );
+}
+
+function DayModal({date,sessions,productions,onClose,addSession,delSession,addProduction,delProduction}){
+  const [adding,setAdding]=useState(sessions.length===0&&productions.length===0);
+  const [pMode,setPMode]=useState(null);
+  const [skills,setSkills]=useState([]),[topic,setTopic]=useState(""),[link,setLink]=useState(""),[notes,setNotes]=useState(""),[dur,setDur]=useState("");
+  const toggle=k=>setSkills(s=>s.includes(k)?s.filter(x=>x!==k):[...s,k]);
+  function save(){if(!skills.length)return;addSession({id:uid(),date,skills,topic:topic.trim(),link:link.trim(),notes:notes.trim(),duration:dur?+dur:null});setSkills([]);setTopic("");setLink("");setNotes("");setDur("");setAdding(false);}
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:14,borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,background:"#fff"}}>
+          <b>{prettyDate(date)}</b><button className="btn btn-soft" onClick={onClose}>✕</button>
+        </div>
+        <div style={{padding:14}}>
+          {sessions.map(s=>(
+            <div key={s.id} className="card" style={{background:"#f8fafc",marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{s.skills.map(k=><span key={k} className="chip on" style={{background:SKILLS[k].color}}>{SKILLS[k].emoji} {SKILLS[k].label}</span>)}</div>
+                <button className="btn btn-soft" style={{padding:"4px 8px"}} onClick={()=>delSession(s.id)}>🗑</button>
+              </div>
+              {s.topic&&<p style={{fontWeight:600,margin:"8px 0 0"}}>{s.topic}</p>}
+              {s.notes&&<p className="muted" style={{margin:"4px 0 0"}}>{s.notes}</p>}
+              <div style={{display:"flex",gap:12,marginTop:8}}>
+                {s.link&&<a href={s.link} target="_blank" className="muted">🔗 Ver recurso</a>}
+                {s.duration&&<span className="muted">{s.duration} min</span>}
+              </div>
+            </div>
+          ))}
+          {productions.length>0&&<div><p className="label" style={{textTransform:"uppercase"}}>Tu writing y speaking de este día</p>{productions.map(p=><ProductionCard key={p.id} p={p} onDelete={delProduction}/>)}</div>}
+          {adding?(
+            <div className="card" style={{background:"#eef2ff",borderColor:"#c7d2fe"}}>
+              <p className="label">Habilidades (una o varias)</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,margin:"6px 0 10px"}}>
+                {SK.map(k=><button key={k} className={"chip"+(skills.includes(k)?" on":"")} style={skills.includes(k)?{background:SKILLS[k].color}:{}} onClick={()=>toggle(k)}>{SKILLS[k].emoji} {SKILLS[k].label}</button>)}
+              </div>
+              <input className="input" placeholder="Tema (ej. phrasal verbs)" value={topic} onChange={e=>setTopic(e.target.value)} style={{marginBottom:8}}/>
+              <input className="input" placeholder="Link del recurso (YouTube, clase...)" value={link} onChange={e=>setLink(e.target.value)} style={{marginBottom:8}}/>
+              <textarea className="input" rows="2" placeholder="¿Qué aprendiste?" value={notes} onChange={e=>setNotes(e.target.value)} style={{marginBottom:8}}/>
+              <input className="input" type="number" placeholder="Duración en minutos (opcional)" value={dur} onChange={e=>setDur(e.target.value)} style={{marginBottom:8}}/>
+              <button className="btn btn-primary" style={{width:"100%"}} disabled={!skills.length} onClick={save}>Guardar sesión</button>
+            </div>
+          ):<button className="btn btn-ghost" style={{width:"100%",justifyContent:"center",borderStyle:"dashed"}} onClick={()=>setAdding(true)}>➕ Agregar sesión de estudio</button>}
+          <div style={{marginTop:10}}>
+            {pMode==="writing"&&<QuickWriting fixedDate={date} onSave={p=>{addProduction(p);setPMode(null);}} onCancel={()=>setPMode(null)}/>}
+            {pMode==="speaking"&&<QuickSpeaking fixedDate={date} onSave={p=>{addProduction(p);setPMode(null);}} onCancel={()=>setPMode(null)}/>}
+            {!pMode&&<div style={{display:"flex",gap:8}}>
+              <button className="btn btn-amber" style={{flex:1,justifyContent:"center"}} onClick={()=>setPMode("writing")}>✍️ Writing de este día</button>
+              <button className="btn btn-red" style={{flex:1,justifyContent:"center"}} onClick={()=>setPMode("speaking")}>🗣️ Speaking de este día</button>
+            </div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProgressView({sessions,productions,onDay}){
+  const counts=SK.map(k=>({name:SKILLS[k].label,value:sessions.filter(s=>s.skills.includes(k)).length,color:SKILLS[k].color})).filter(x=>x.value>0);
+  const maxv=Math.max(1,...counts.map(c=>c.value));
+  const speak=productions.filter(p=>p.type==="speaking"),write=productions.filter(p=>p.type==="writing");
+  const timeline=[...productions].sort((a,b)=>b.date.localeCompare(a.date));
+  const [ana,setAna]=useState(""),[anaBusy,setAnaBusy]=useState(false);
+  async function analyze(){
+    if(!speak.length){setAna("Aún no tienes speakings guardados.");return;}
+    setAnaBusy(true);
+    try{
+      const list=[...speak].sort((a,b)=>a.date.localeCompare(b.date)).map(p=>`- ${p.date} | tema: ${p.topic||"—"} | duración: ${p.seconds?p.seconds+"s":"—"} | notas: ${p.notes||"(sin notas)"}`).join("\n");
+      const out=await callClaude([{role:"user",content:`Eres tutor de inglés. Analiza el PROGRESO DE SPEAKING de un estudiante según su registro (no puedes oír el audio; básate en constancia, variedad de temas y notas). En español: 1) constancia y evolución, 2) temas cubiertos y faltantes, 3) tres recomendaciones. Breve y motivador.\n\nSpeakings:\n${list}`}]);
+      setAna(out);
+    }catch(e){setAna(e.nokey?"Agrega tu clave de Gemini en ⚙️ Ajustes para usar la IA.":"Error de conexión.");}
+    setAnaBusy(false);
+  }
+  const stat=(l,v)=><div className="stat"><b>{v}</b><span>{l}</span></div>;
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:18}}>
+      <div className="grid4">{stat("Sesiones",sessions.length)}{stat("Racha 🔥",calcStreak(sessions))}{stat("Writings",write.length)}{stat("Speakings",speak.length)}</div>
+      {counts.length>0&&<div><b>Sesiones por habilidad</b><div style={{marginTop:8}}>{counts.map(c=><div key={c.name} className="bar-row"><span className="bar-label">{c.name}</span><div className="bar-track"><div className="bar-fill" style={{width:(c.value/maxv*100)+"%",background:c.color}}></div></div><span>{c.value}</span></div>)}</div></div>}
+      <div className="card" style={{background:"#fff7ed",borderColor:"#fed7aa"}}>
+        <b>📈 Análisis de progreso de Speaking</b>
+        <p className="muted" style={{margin:"4px 0 0"}}>La IA revisa tus speakings (fechas, temas y notas) y te dice cómo vas.</p>
+        <button className="btn btn-red" style={{marginTop:10}} onClick={analyze} disabled={anaBusy}>{anaBusy?"Analizando...":"✨ Analizar mi speaking"}</button>
+        {ana&&<div style={{marginTop:10,background:"#fff",border:"1px solid #fed7aa",borderRadius:8,padding:12,whiteSpace:"pre-wrap",fontSize:14}}>{ana}</div>}
+      </div>
+      <div><b>Tus producciones en el tiempo</b>
+        {timeline.length===0?<p className="muted">Aún no has guardado writing ni speaking.</p>:
+        <div style={{marginTop:8}}>{timeline.map(p=>(
+          <div key={p.id} className="card" style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+            <span style={{fontSize:18}}>{p.type==="writing"?"✍️":"🗣️"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontWeight:600,margin:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.topic||(p.type==="writing"?"Writing":"Speaking")}</p>
+              <button className="btn" style={{padding:0,background:"none",color:"#6366f1",fontSize:12}} onClick={()=>onDay(p.date)}>{prettyDate(p.date)} · ver ese día</button>
+            </div>
+            {p.type==="speaking"&&p.audioId&&<AudioPlayer audioId={p.audioId}/>}
+          </div>
+        ))}</div>}
+      </div>
+    </div>
+  );
+}
+
+function LibraryView({sessions,productions,delSession,delProduction,addProduction}){
+  const [tab,setTab]=useState("sessions"),[adding,setAdding]=useState(null);
+  const sorted=[...sessions].sort((a,b)=>b.date.localeCompare(a.date));
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <button className={"chip"+(tab==="sessions"?" on":"")} style={tab==="sessions"?{background:"#6366f1"}:{}} onClick={()=>setTab("sessions")}>Sesiones ({sessions.length})</button>
+        <button className={"chip"+(tab==="productions"?" on":"")} style={tab==="productions"?{background:"#6366f1"}:{}} onClick={()=>setTab("productions")}>Mis producciones ({productions.length})</button>
+      </div>
+      {tab==="sessions"&&<div>
+        {sorted.length===0&&<p className="muted" style={{textAlign:"center",padding:"30px 0"}}>Tu biblioteca está vacía.</p>}
+        {sorted.map(s=>(
+          <div key={s.id} className="card" style={{marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span className="label">{prettyDate(s.date)}</span><button className="btn btn-soft" style={{padding:"4px 8px"}} onClick={()=>delSession(s.id)}>🗑</button></div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>{s.skills.map(k=><span key={k} className="chip on" style={{background:SKILLS[k].color}}>{SKILLS[k].label}</span>)}</div>
+            {s.topic&&<p style={{fontWeight:600,margin:"8px 0 0"}}>{s.topic}</p>}
+            {s.notes&&<p className="muted" style={{margin:"4px 0 0"}}>{s.notes}</p>}
+            {s.link&&<a href={s.link} target="_blank" className="muted" style={{display:"inline-block",marginTop:6}}>🔗 Ver recurso</a>}
+          </div>
+        ))}
+      </div>}
+      {tab==="productions"&&<div>
+        <div style={{display:"flex",gap:8,marginBottom:10}}>
+          <button className="btn btn-amber" onClick={()=>setAdding("writing")}>✍️ + Texto</button>
+          <button className="btn btn-red" onClick={()=>setAdding("speaking")}>🗣️ + Audio</button>
+        </div>
+        {adding==="writing"&&<QuickWriting onSave={p=>{addProduction(p);setAdding(null);}} onCancel={()=>setAdding(null)}/>}
+        {adding==="speaking"&&<QuickSpeaking onSave={p=>{addProduction(p);setAdding(null);}} onCancel={()=>setAdding(null)}/>}
+        {productions.length===0&&!adding&&<p className="muted" style={{textAlign:"center",padding:"30px 0"}}>Aquí se guardan tus textos y audios.</p>}
+        <div style={{marginTop:10}}>{productions.map(p=><ProductionCard key={p.id} p={p} onDelete={delProduction}/>)}</div>
+      </div>}
+    </div>
+  );
+}
+
+function AssistantView({sessions,productions}){
+  const [messages,setMessages]=useState([]),[input,setInput]=useState(""),[busy,setBusy]=useState(false);
+  const endRef=useRef(null);
+  useEffect(()=>{endRef.current&&endRef.current.scrollIntoView({behavior:"smooth"});},[messages,busy]);
+  const quick=["Analiza mi nivel real y mis errores (sé honesto)","Hazme un repaso realista de esta semana","¿Qué errores repito en mis writings?","¿Qué temas me faltan según lo que he estudiado?"];
+  async function send(text){
+    const q=text||input;if(!q.trim()||busy)return;
+    const nm=[...messages,{role:"user",content:q}];setMessages(nm);setInput("");setBusy(true);
+    try{
+      const historial=messages.slice(-8).map(m=>(m.role==="user"?"ESTUDIANTE":"TUTOR")+": "+m.content).join("\n");
+      const sys=`Eres un tutor de inglés EXIGENTE, REALISTA y DIRECTO. NO eres motivador ni complaciente: tu deber es decir la verdad sobre el nivel real del estudiante para que mejore rápido. Prohibido el relleno tipo "¡vas muy bien!" o halagos vacíos. No exageres lo positivo. Si algo está mal, dilo claro.
+
+REGLAS:
+- Basa TODO en los datos reales de abajo (writings completos, speakings, links/recursos y sesiones). Si no hay evidencia de algo, dilo explícitamente ("no tengo evidencia de X") y NUNCA inventes progreso ni elogios.
+- Cuando corrijas, cita el fragmento EXACTO del texto del estudiante y da la corrección: «lo que escribió» → «corrección» + por qué.
+- Sé específico: menciona fechas, temas y fragmentos reales. Nada genérico.
+- Responde en español; los ejemplos y correcciones, en inglés.
+
+Cuando el estudiante pida un ANÁLISIS, REPASO, PROGRESO o "cómo voy", responde con esta estructura exacta (usa estos títulos):
+1) NIVEL REAL ESTIMADO (CEFR A1–C2) — justifícalo con evidencia de sus textos.
+2) ERRORES RECURRENTES — lista los más graves con ejemplos exactos suyos y su corrección.
+3) FORTALEZAS REALES — solo si hay evidencia; si no, dilo.
+4) VACÍOS — gramática/temas que NO ha practicado según sus datos.
+5) CONSTANCIA — frecuencia y regularidad; sé crítico si estudia poco o irregular.
+6) PLAN: 3 acciones concretas para los próximos 7 días.
+Si es una pregunta normal, respóndela directo y con realismo usando sus datos (no hace falta toda la estructura).
+
+${buildContext(sessions,productions)}
+${historial?"\n--- CONVERSACIÓN PREVIA ---\n"+historial:""}
+
+PREGUNTA ACTUAL DEL ESTUDIANTE: ${q}`;
+      const reply=await callClaude([{role:"user",content:sys}]);
+      setMessages([...nm,{role:"assistant",content:reply||"No pude responder."}]);
+    }catch(e){setMessages([...nm,{role:"assistant",content:e.nokey?"Agrega tu clave de Gemini en ⚙️ Ajustes para usar el asistente.":("Error: "+(e.message||e))}]);}
+    setBusy(false);
+  }
+  return (
+    <div style={{display:"flex",flexDirection:"column",height:480}}>
+      <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,paddingRight:4}}>
+        {messages.length===0&&<div style={{textAlign:"center",color:"#94a3b8",marginTop:30}}>
+          <p>Pregúntame lo que quieras sobre tu aprendizaje.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,maxWidth:380,margin:"16px auto 0"}}>
+            {quick.map(q=><button key={q} className="btn btn-ghost" style={{textAlign:"left",justifyContent:"flex-start"}} onClick={()=>send(q)}>{q}</button>)}
+          </div>
+        </div>}
+        {messages.map((m,i)=><div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}><div className={"msg "+(m.role==="user"?"user":"bot")}>{m.content}</div></div>)}
+        {busy&&<div className="msg bot">…</div>}
+        <div ref={endRef}></div>
+      </div>
+      <div style={{display:"flex",gap:8,marginTop:12,paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
+        <input className="input" placeholder="Escribe tu pregunta..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()}/>
+        <button className="btn btn-primary" onClick={()=>send()} disabled={busy}>➤</button>
+      </div>
+    </div>
+  );
+}
+
+function ExamView({sessions,productions,addProduction}){
+  const [type,setType]=useState("auto"),[focus,setFocus]=useState(""),[busy,setBusy]=useState(false);
+  const [ev,setEv]=useState(null),[answer,setAnswer]=useState(""),[fb,setFb]=useState(""),[fbBusy,setFbBusy]=useState(false),[saved,setSaved]=useState("");
+  const [direct,setDirect]=useState(null),[dMsg,setDMsg]=useState("");
+  async function generate(){
+    if(!sessions.length){setEv({error:"Primero registra algunas sesiones."});return;}
+    setBusy(true);setEv(null);setAnswer("");setFb("");setSaved("");
+    try{
+      const ti=type==="auto"?"Decide tú si es 'writing' o 'speaking'.":`El tipo DEBE ser '${type}'.`;
+      const raw=await callClaude([{role:"user",content:`Eres tutor de inglés. Crea UNA evaluación final personalizada según lo estudiado. ${ti} Siempre writing o speaking.${focus?" Enfoque: "+focus:""}\nResponde SOLO con JSON válido sin markdown: {"type":"writing"|"speaking","topic":"...","instructions":"consigna en español","tips":"qué incluir","level":"CEFR"}\n\n${buildContext(sessions,productions)}`}]);
+      const clean=raw.replace(/\`\`\`json|\`\`\`/g,"").trim();const mt=clean.match(/\{[\s\S]*\}/);
+      setEv(JSON.parse(mt?mt[0]:clean));
+    }catch(e){setEv({error:e.nokey?"Agrega tu clave de Gemini en ⚙️ Ajustes.":"No pude generar la evaluación."});}
+    setBusy(false);
+  }
+  async function getFb(){
+    if(!answer.trim())return;setFbBusy(true);
+    try{const out=await callClaude([{role:"user",content:`Eres tutor de inglés. Consigna: "${ev.instructions}". Da retroalimentación en español: corrige errores clave, resalta lo bueno, da nivel CEFR. Motivador.\n\nTexto:\n${answer}`}]);setFb(out);}
+    catch(e){setFb(e.nokey?"Agrega tu clave en ⚙️ Ajustes.":"Error.");}
+    setFbBusy(false);
+  }
+  function saveW(){addProduction({id:uid(),type:"writing",date:todayStr(),topic:ev.topic,prompt:ev.instructions,text:answer.trim(),feedback:fb});setSaved("✅ Guardado en tu Biblioteca.");}
+  async function saveS(blob,secs){const id=uid();await putAudio(id,blob);addProduction({id,type:"speaking",date:todayStr(),topic:ev.topic,prompt:ev.instructions,audioId:id,seconds:secs});setSaved("✅ Audio guardado en tu Biblioteca.");}
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div className="card">
+        <b>📄 Entregar mi resultado</b>
+        <p className="muted" style={{margin:"4px 0 0"}}>Deja directamente tu writing o speaking final. Se guarda en tu Biblioteca.</p>
+        <div style={{display:"flex",gap:8,marginTop:10}}>
+          <button className="btn btn-amber" style={{flex:1,justifyContent:"center"}} onClick={()=>{setDirect(direct==="writing"?null:"writing");setDMsg("");}}>✍️ Entregar Writing</button>
+          <button className="btn btn-red" style={{flex:1,justifyContent:"center"}} onClick={()=>{setDirect(direct==="speaking"?null:"speaking");setDMsg("");}}>🗣️ Entregar Speaking</button>
+        </div>
+        {direct==="writing"&&<div style={{marginTop:10}}><QuickWriting onSave={p=>{addProduction(p);setDirect(null);setDMsg("✅ Tu writing quedó guardado.");}} onCancel={()=>setDirect(null)}/></div>}
+        {direct==="speaking"&&<div style={{marginTop:10}}><QuickSpeaking onSave={p=>{addProduction(p);setDirect(null);setDMsg("✅ Tu speaking quedó guardado.");}} onCancel={()=>setDirect(null)}/></div>}
+        {dMsg&&<p style={{color:"#059669",fontWeight:600,marginTop:8}}>{dMsg}</p>}
+      </div>
+      <div className="card" style={{background:"#eef2ff",borderColor:"#c7d2fe"}}>
+        <b>🎓 Evaluación a la medida</b>
+        <p className="muted" style={{margin:"4px 0 0"}}>Genero una evaluación según lo que has estudiado. Siempre speaking o writing.</p>
+        <div style={{display:"flex",gap:8,marginTop:10}}>
+          {[["auto","Que decida la IA"],["writing","✍️ Writing"],["speaking","🗣️ Speaking"]].map(([v,l])=><button key={v} className={"chip"+(type===v?" on":"")} style={type===v?{background:"#4f46e5"}:{}} onClick={()=>setType(v)}>{l}</button>)}
+        </div>
+        <input className="input" placeholder='Enfoque opcional (ej. "según este mes, past tense")' value={focus} onChange={e=>setFocus(e.target.value)} style={{margin:"10px 0"}}/>
+        <button className="btn btn-primary" style={{width:"100%"}} onClick={generate} disabled={busy}>{busy?"Generando...":"✨ Generar evaluación"}</button>
+      </div>
+      {ev&&ev.error&&<p style={{color:"#ef4444",textAlign:"center"}}>{ev.error}</p>}
+      {ev&&!ev.error&&<div className="card">
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <span className="chip on" style={{background:ev.type==="writing"?SKILLS.writing.color:SKILLS.speaking.color}}>{ev.type==="writing"?"✍️ Writing":"🗣️ Speaking"}</span>
+          {ev.level&&<span className="muted">Objetivo: {ev.level}</span>}
+        </div>
+        <h4 style={{margin:"10px 0 6px"}}>{ev.topic}</h4>
+        <p style={{whiteSpace:"pre-wrap",fontSize:14}}>{ev.instructions}</p>
+        {ev.tips&&<p style={{background:"#f8fafc",borderRadius:8,padding:8}} className="muted">💡 {ev.tips}</p>}
+        <div style={{borderTop:"1px solid #f1f5f9",paddingTop:12,marginTop:6}}>
+          {ev.type==="writing"?<div>
+            <textarea className="input" rows="6" placeholder="Escribe tu respuesta en inglés..." value={answer} onChange={e=>setAnswer(e.target.value)}/>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+              <button className="btn btn-green" onClick={getFb} disabled={fbBusy||!answer.trim()}>{fbBusy?"...":"Corregir con IA"}</button>
+              <button className="btn btn-primary" onClick={saveW} disabled={!answer.trim()}>Guardar en Biblioteca</button>
+            </div>
+            {fb&&<div style={{background:"#ecfdf5",color:"#065f46",borderRadius:8,padding:12,marginTop:10,whiteSpace:"pre-wrap",fontSize:14}}>{fb}</div>}
+          </div>:<div>
+            <p className="muted" style={{marginTop:0}}>Graba tu respuesta hablada y guárdala.</p>
+            <AudioRecorder onSave={saveS}/>
+          </div>}
+          {saved&&<p style={{color:"#059669",fontWeight:600,marginTop:8}}>{saved}</p>}
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+function SettingsView(){
+  const [key,setKey]=useState(localStorage.getItem("et_apikey")||"");
+  const [msg,setMsg]=useState("");
+  const [sbUrl,setSbUrl]=useState(localStorage.getItem("sb_url")||"");
+  const [sbKey,setSbKey]=useState(localStorage.getItem("sb_key")||"");
+  const [sbMsg,setSbMsg]=useState("");
+  const conectada=!!(localStorage.getItem("sb_url")&&localStorage.getItem("sb_key"));
+  function saveKey(){localStorage.setItem("et_apikey",key.trim());setMsg("✅ Clave guardada.");}
+  function clearKey(){localStorage.removeItem("et_apikey");setKey("");setMsg("Clave borrada.");}
+  async function saveSb(){
+    const u=sbUrl.trim().replace(/\/$/,"");
+    if(!u||!sbKey.trim()){setSbMsg("Completa las dos casillas.");return;}
+    localStorage.setItem("sb_url",u);localStorage.setItem("sb_key",sbKey.trim());
+    setSbMsg("Probando conexión...");
+    try{
+      const c=window.supabase.createClient(u,sbKey.trim());
+      const {error}=await c.from("app_data").select("id").limit(1);
+      if(error)throw error;
+      setSbMsg("✅ ¡Nube conectada! Recarga la página (Ctrl+Shift+R) para empezar a sincronizar.");
+    }catch(e){setSbMsg("❌ No se pudo conectar: "+(e.message||e)+". Revisa la URL, la clave y que hayas corrido el código SQL.");}
+  }
+  function clearSb(){localStorage.removeItem("sb_url");localStorage.removeItem("sb_key");setSbUrl("");setSbKey("");setSbMsg("Nube desconectada. Recarga la página.");}
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div className="card" style={{background:"#eff6ff",borderColor:"#bfdbfe"}}>
+        <b>☁️ Memoria en la nube (Supabase) — GRATIS</b>
+        <p className="muted" style={{margin:"4px 0 10px"}}>Conecta tu app a la nube para que tus sesiones, writings, audios y links se guarden en internet y los veas desde cualquier dispositivo. {conectada?<span style={{color:"#059669",fontWeight:700}}>Estado: conectada ✅</span>:<span style={{color:"#d97706",fontWeight:700}}>Estado: sin conectar</span>}</p>
+        <p className="label">URL del proyecto</p>
+        <input className="input" placeholder="https://xxxxx.supabase.co" value={sbUrl} onChange={e=>setSbUrl(e.target.value)} style={{margin:"4px 0 8px"}}/>
+        <p className="label">Clave pública (anon / public)</p>
+        <input className="input" placeholder="eyJhbGci..." value={sbKey} onChange={e=>setSbKey(e.target.value)} style={{margin:"4px 0 8px"}}/>
+        <button className="btn btn-primary" onClick={saveSb}>Conectar nube</button>
+        <button className="btn btn-soft" onClick={clearSb} style={{marginLeft:8}}>Desconectar</button>
+        {sbMsg&&<p style={{marginTop:8,fontSize:13,whiteSpace:"pre-wrap"}}>{sbMsg}</p>}
+        <p className="muted" style={{marginTop:10,fontSize:12}}>Consíguelas gratis en supabase.com → tu proyecto → Settings → API. Copia <b>Project URL</b> y la clave <b>anon public</b>.</p>
+      </div>
+      <div className="card">
+        <b>⚙️ Clave de Google Gemini (para las funciones de IA, GRATIS)</b>
+        <p className="muted" style={{margin:"4px 0 10px"}}>El asistente, las evaluaciones y el análisis de speaking usan IA. Pega tu clave gratuita de Google Gemini para activarlas. Se guarda solo en este navegador.</p>
+        <input className="input" placeholder="AIza..." value={key} onChange={e=>setKey(e.target.value)} style={{marginBottom:8}}/>
+        <button className="btn btn-primary" onClick={saveKey}>Guardar clave</button>
+        <button className="btn btn-soft" onClick={clearKey} style={{marginLeft:8}}>Borrar</button>
+        {msg&&<p style={{color:"#059669",marginTop:8}}>{msg}</p>}
+        <p className="muted" style={{marginTop:10,fontSize:12}}>⚠️ Consíguela gratis en aistudio.google.com/apikey.</p>
+      </div>
+      <div className="card">
+        <b>💾 Cómo se guardan tus datos</b>
+        <p className="muted" style={{margin:"4px 0 0"}}>Sin nube conectada: todo se guarda solo en este navegador. Con la nube de Supabase conectada (arriba): se guarda también en internet y lo ves desde cualquier dispositivo. 🌎</p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
