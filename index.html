@@ -334,7 +334,7 @@ function App(){
   const [view,setView]=useState("calendar");
   const [sessions,setSessions]=useState(()=>load("et_sessions",[]));
   const [productions,setProductions]=useState(()=>load("et_productions",[]));
-  const [notebook,setNotebook]=useState(()=>load("et_notes",[]));
+  const [notebook,setNotebook]=useState(()=>load("et_notes",""));
   const [month,setMonth]=useState(()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),1);});
   const [dayModal,setDayModal]=useState(null);
   const cloudReady=useRef(false);
@@ -358,7 +358,7 @@ function App(){
   },[]);
   useEffect(()=>{persist("et_sessions",sessions);if(SB.on()&&cloudReady.current)cloudSave("sessions",sessions).catch(e=>console.error("Nube (guardar sesiones):",e));},[sessions]);
   useEffect(()=>{persist("et_productions",productions);if(SB.on()&&cloudReady.current)cloudSave("productions",productions).catch(e=>console.error("Nube (guardar producciones):",e));},[productions]);
-  useEffect(()=>{persist("et_notes",notebook);if(SB.on()&&cloudReady.current)cloudSave("notes",notebook).catch(e=>console.error("Nube (guardar notas):",e));},[notebook]);
+  useEffect(()=>{persist("et_notes",notebook);if(!(SB.on()&&cloudReady.current))return;const t=setTimeout(()=>cloudSave("notes",notebook).catch(e=>console.error("Nube (guardar notas):",e)),800);return ()=>clearTimeout(t);},[notebook]);
 
   const addSession=s=>setSessions(p=>[...p,s]);
   const delSession=id=>setSessions(p=>p.filter(s=>s.id!==id));
@@ -581,8 +581,8 @@ Si es una pregunta normal, respóndela directo y con realismo usando sus datos (
 
 ${buildContext(sessions,productions)}
 
---- NOTAS / BLOC DE NOTAS DEL ESTUDIANTE ---
-${(notebook&&notebook.length)?notebook.map(n=>`- [${n.date}] ${n.title||"(sin título)"}: ${n.text||""}`).join("\n"):"(sin notas)"}
+--- BLOC DE NOTAS DEL ESTUDIANTE ---
+${notesToText(notebook)||"(sin notas)"}
 ${historial?"\n--- CONVERSACIÓN PREVIA ---\n"+historial:""}
 
 PREGUNTA ACTUAL DEL ESTUDIANTE: ${q}`;
@@ -734,38 +734,31 @@ function ExamView({sessions,productions,addProduction}){
   );
 }
 
+// Convierte notas viejas (lista) a texto plano, por si ya tenías guardadas
+function notesToText(v){
+  if(typeof v==="string")return v;
+  if(Array.isArray(v))return v.map(n=>((n&&n.title?n.title+"\n":"")+((n&&n.text)||"")).trim()).filter(Boolean).join("\n\n———\n\n");
+  return "";
+}
 function NotesView({notebook,setNotebook}){
-  const [title,setTitle]=useState(""),[text,setText]=useState(""),[q,setQ]=useState("");
-  function add(){
-    if(!title.trim()&&!text.trim())return;
-    setNotebook(n=>[{id:uid(),date:todayStr(),title:title.trim(),text:text.trim()},...n]);
-    setTitle("");setText("");
-  }
-  function update(id,campo,val){setNotebook(n=>n.map(x=>x.id===id?{...x,[campo]:val}:x));}
-  function del(id){setNotebook(n=>n.filter(x=>x.id!==id));}
-  const filtro=q.trim().toLowerCase();
-  const lista=notebook.filter(n=>!filtro||(n.title+" "+n.text).toLowerCase().includes(filtro));
+  const texto=notesToText(notebook);
+  const [guardado,setGuardado]=useState(false);
+  function onChange(v){setNotebook(v);setGuardado(true);}
+  useEffect(()=>{if(!guardado)return;const t=setTimeout(()=>setGuardado(false),1500);return ()=>clearTimeout(t);},[texto,guardado]);
+  const palabras=texto.trim()?texto.trim().split(/\s+/).length:0;
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div className="card" style={{background:"#fffbeb",borderColor:"#fde68a"}}>
-        <b>📝 Nueva nota</b>
-        <input className="input" placeholder="Título (ej. Phrasal verbs, dudas, vocabulario...)" value={title} onChange={e=>setTitle(e.target.value)} style={{margin:"8px 0"}}/>
-        <textarea className="input" rows="4" placeholder="Escribe aquí tus apuntes, dudas, palabras nuevas, reglas..." value={text} onChange={e=>setText(e.target.value)} style={{marginBottom:8}}/>
-        <button className="btn btn-amber" onClick={add} disabled={!title.trim()&&!text.trim()}>＋ Guardar nota</button>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <b>📝 Mi bloc de notas</b>
+        <span className="muted" style={{fontSize:12}}>{guardado?"💾 Guardando...":"✅ Guardado"} · {palabras} palabras</span>
       </div>
-      {notebook.length>3&&<input className="input" placeholder="🔎 Buscar en mis notas..." value={q} onChange={e=>setQ(e.target.value)}/>}
-      {notebook.length===0&&<p className="muted" style={{textAlign:"center",padding:"20px 0"}}>Aún no tienes notas. Crea la primera arriba. ☝️</p>}
-      {lista.map(n=>(
-        <div key={n.id} className="card">
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-            <input value={n.title} onChange={e=>update(n.id,"title",e.target.value)} placeholder="(sin título)" style={{border:0,fontWeight:700,fontSize:15,flex:1,fontFamily:"inherit",color:"#1e293b",background:"transparent"}}/>
-            <span className="muted" style={{fontSize:11,whiteSpace:"nowrap"}}>{prettyDate(n.date)}</span>
-            <button className="btn btn-soft" style={{padding:"4px 8px"}} onClick={()=>del(n.id)}>🗑</button>
-          </div>
-          <textarea value={n.text} onChange={e=>update(n.id,"text",e.target.value)} rows={Math.min(12,Math.max(2,Math.ceil((n.text||"").length/50)))} placeholder="(nota vacía)" style={{width:"100%",border:0,resize:"vertical",fontSize:14,fontFamily:"inherit",color:"#334155",marginTop:6,background:"transparent",outline:"none"}}/>
-        </div>
-      ))}
-      <p className="muted" style={{fontSize:12,textAlign:"center"}}>✍️ Las notas se guardan solas (en tu navegador y en la nube). Edítalas cuando quieras. El asistente también puede leerlas.</p>
+      <textarea
+        value={texto}
+        onChange={e=>onChange(e.target.value)}
+        placeholder="Escribe aquí libremente: apuntes, dudas, vocabulario nuevo, reglas de gramática, frases en inglés... Todo se guarda solo. ✍️"
+        style={{width:"100%",minHeight:420,padding:14,border:"1px solid #e2e8f0",borderRadius:12,fontSize:15,fontFamily:"inherit",lineHeight:1.6,color:"#1e293b",resize:"vertical",outline:"none"}}
+      />
+      <p className="muted" style={{fontSize:12,textAlign:"center"}}>Se guarda solo en tu navegador y en la nube 🌎. El asistente también lee estas notas.</p>
     </div>
   );
 }
