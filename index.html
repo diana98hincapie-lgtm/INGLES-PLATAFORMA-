@@ -119,19 +119,55 @@ async function delAudio(id){
   const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction("audios","readwrite");t.objectStore("audios").delete(id);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});
 }
 
-async function callClaude(messages){
+// Motor base: recibe "parts" (texto, audio o video) y devuelve la respuesta de Gemini
+async function callGemini(parts,maxTokens){
   const key=localStorage.getItem("et_apikey");
   if(!key) throw {nokey:true};
-  const contents=messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}));
   const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="+encodeURIComponent(key),{
     method:"POST",
     headers:{"content-type":"application/json"},
-    body:JSON.stringify({contents,generationConfig:{maxOutputTokens:2048}})
+    body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{maxOutputTokens:maxTokens||2048}})
   });
   const data=await res.json();
   if(data.error) throw new Error(data.error.message||"Error de la API");
   const cand=(data.candidates||[])[0];
   return ((cand&&cand.content&&cand.content.parts)||[]).filter(p=>p.text).map(p=>p.text).join("\n");
+}
+// Compatibilidad: texto simple
+async function callClaude(messages){
+  return callGemini(messages.map(m=>({text:m.content})));
+}
+// Convierte un audio (blob) a base64 para enviarlo a la IA
+function blobToB64(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onloadend=()=>res(String(r.result).split(",")[1]);r.onerror=rej;r.readAsDataURL(blob);});}
+// Trae el audio como blob (desde la nube o desde IndexedDB) para que la IA lo escuche
+async function getAudioBlob(id){
+  if(SB.on()){const r=await fetch(SB.url()+"/storage/v1/object/public/audios/"+encodeURIComponent(id));if(!r.ok)throw new Error("No se pudo descargar el audio de la nube.");return await r.blob();}
+  const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction("audios","readonly");const q=t.objectStore("audios").get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error);});
+}
+// 🎧 Analiza un audio de speaking (Gemini lo ESCUCHA)
+async function analizarAudio(audioId,topic){
+  const blob=await getAudioBlob(audioId);
+  if(!blob)throw new Error("No encontré el audio.");
+  const b64=await blobToB64(blob);
+  const prompt=`Eres un examinador de inglés EXIGENTE y REALISTA (no complaciente). Escucha este audio de un estudiante hablando en inglés${topic?" sobre: "+topic:""}. Analiza en español, sin halagos vacíos:
+1) NIVEL de speaking (CEFR A1–C2) con justificación de lo que oíste.
+2) PRONUNCIACIÓN: sonidos/palabras mal pronunciadas (escríbelas) y cómo deberían sonar.
+3) FLUIDEZ: pausas, muletillas, ritmo.
+4) GRAMÁTICA y VOCABULARIO usados al hablar: errores concretos → corrección.
+5) 3 ejercicios concretos para mejorar.
+Si el audio no se entiende o está vacío, dilo claramente.`;
+  return callGemini([{text:prompt},{inlineData:{mimeType:blob.type||"audio/webm",data:b64}}],2048);
+}
+// 🎥 Analiza un video de YouTube (Gemini lo VE)
+async function analizarVideo(url,topic){
+  const prompt=`Eres un tutor de inglés. Analiza este video de YouTube${topic?" (el estudiante lo estudió por el tema: "+topic+")":""}. En español, de forma útil y concreta:
+1) RESUMEN: de qué trata y qué enseña de inglés.
+2) VOCABULARIO y EXPRESIONES clave del video (lista con significado).
+3) PUNTOS DE GRAMÁTICA que aparecen.
+4) Nivel aproximado (CEFR) del contenido.
+5) 3 tareas para practicar lo del video.
+Si no puedes acceder al video (privado, muy largo o no disponible), dilo claramente.`;
+  return callGemini([{text:prompt},{fileData:{fileUri:url}}],2048);
 }
 function calcStreak(sessions){const set=new Set(sessions.map(s=>s.date));let st=0,d=new Date();if(!set.has(fmt(d)))d.setDate(d.getDate()-1);while(set.has(fmt(d))){st++;d.setDate(d.getDate()-1);}return st;}
 function buildContext(sessions,productions){
@@ -218,7 +254,33 @@ function AudioPlayer({audioId}){
   return <button className="btn btn-soft" onClick={play}>{loading?"...":"▶ Reproducir audio"}</button>;
 }
 
+// 🎥 Botón + resultado para analizar un video de YouTube
+function LinkAnalyzer({url,topic}){
+  const [ana,setAna]=useState("");
+  const [busy,setBusy]=useState(false);
+  async function analizar(){
+    setBusy(true);setAna("");
+    try{setAna(await analizarVideo(url,topic));}
+    catch(e){setAna(e.nokey?"Agrega tu clave de Gemini en ⚙️ Ajustes para analizar el video.":"No se pudo analizar: "+(e.message||e));}
+    setBusy(false);
+  }
+  return (
+    <div style={{marginTop:8}}>
+      <button className="btn btn-soft" onClick={analizar} disabled={busy}>{busy?"🎥 Viendo el video...":"🎥 Analizar video con IA"}</button>
+      {ana&&<div style={{background:"#eff6ff",color:"#1e3a8a",borderRadius:8,padding:10,marginTop:8,whiteSpace:"pre-wrap",fontSize:14}}>🎥 {ana}</div>}
+    </div>
+  );
+}
+
 function ProductionCard({p,onDelete}){
+  const [ana,setAna]=useState("");
+  const [busy,setBusy]=useState(false);
+  async function analizar(){
+    setBusy(true);setAna("");
+    try{setAna(await analizarAudio(p.audioId,p.topic));}
+    catch(e){setAna(e.nokey?"Agrega tu clave de Gemini en ⚙️ Ajustes para analizar el audio.":"No se pudo analizar: "+(e.message||e));}
+    setBusy(false);
+  }
   return (
     <div className="card" style={{marginBottom:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -231,9 +293,13 @@ function ProductionCard({p,onDelete}){
       {p.topic&&<p style={{fontWeight:600,margin:"8px 0 0"}}>{p.topic}</p>}
       {p.prompt&&<p className="muted" style={{fontStyle:"italic",margin:"4px 0 0"}}>Consigna: {p.prompt}</p>}
       {p.type==="writing"&&p.text&&<p style={{whiteSpace:"pre-wrap",background:"#f8fafc",borderRadius:8,padding:8,margin:"8px 0 0",fontSize:14}}>{p.text}</p>}
-      {p.type==="speaking"&&p.audioId&&<div style={{marginTop:8}}><AudioPlayer audioId={p.audioId}/></div>}
+      {p.type==="speaking"&&p.audioId&&<div style={{marginTop:8,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <AudioPlayer audioId={p.audioId}/>
+        <button className="btn btn-red" onClick={analizar} disabled={busy}>{busy?"🎧 Escuchando...":"🎧 Analizar audio con IA"}</button>
+      </div>}
       {p.notes&&<p className="muted" style={{margin:"8px 0 0"}}>🗒️ {p.notes}</p>}
       {p.feedback&&<div style={{background:"#ecfdf5",color:"#065f46",borderRadius:8,padding:8,marginTop:8,whiteSpace:"pre-wrap",fontSize:14}}>📝 {p.feedback}</div>}
+      {ana&&<div style={{background:"#fef2f2",color:"#7f1d1d",borderRadius:8,padding:10,marginTop:8,whiteSpace:"pre-wrap",fontSize:14}}>🎧 {ana}</div>}
     </div>
   );
 }
@@ -371,6 +437,7 @@ function DayModal({date,sessions,productions,onClose,addSession,delSession,addPr
                 {s.link&&<a href={s.link} target="_blank" className="muted">🔗 Ver recurso</a>}
                 {s.duration&&<span className="muted">{s.duration} min</span>}
               </div>
+              {s.link&&/youtu/.test(s.link)&&<LinkAnalyzer url={s.link} topic={s.topic}/>}
             </div>
           ))}
           {productions.length>0&&<div><p className="label" style={{textTransform:"uppercase"}}>Tu writing y speaking de este día</p>{productions.map(p=><ProductionCard key={p.id} p={p} onDelete={delProduction}/>)}</div>}
@@ -462,7 +529,7 @@ function LibraryView({sessions,productions,delSession,delProduction,addProductio
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>{s.skills.map(k=><span key={k} className="chip on" style={{background:SKILLS[k].color}}>{SKILLS[k].label}</span>)}</div>
             {s.topic&&<p style={{fontWeight:600,margin:"8px 0 0"}}>{s.topic}</p>}
             {s.notes&&<p className="muted" style={{margin:"4px 0 0"}}>{s.notes}</p>}
-            {s.link&&<a href={s.link} target="_blank" className="muted" style={{display:"inline-block",marginTop:6}}>🔗 Ver recurso</a>}
+            {s.link&&<div><a href={s.link} target="_blank" className="muted" style={{display:"inline-block",marginTop:6}}>🔗 Ver recurso</a>{/youtu/.test(s.link)&&<LinkAnalyzer url={s.link} topic={s.topic}/>}</div>}
           </div>
         ))}
       </div>}
